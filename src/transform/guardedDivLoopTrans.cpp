@@ -659,8 +659,12 @@ GuardedDivLoopTrans::transformDivergentLoops() {
 
   } else {
     // checkpoint:
-    FAM.invalidate<DominatorTreeAnalysis>(vecInfo.getScalarFunction());
-    FAM.invalidate<PostDominatorTreeAnalysis>(vecInfo.getScalarFunction());
+    // FAM.invalidate<DominatorTreeAnalysis>(vecInfo.getScalarFunction());
+    // FAM.invalidate<PostDominatorTreeAnalysis>(vecInfo.getScalarFunction());
+    PreservedAnalyses PA;
+    PA.preserve<LoopAnalysis>();
+    FAM.invalidate(vecInfo.getScalarFunction(), PA);
+    FAM.getResult<LoopAnalysis>(vecInfo.getScalarFunction());
     IF_DEBUG_DLT {
       Dump(vecInfo.getScalarFunction());
       LI.print(errs());

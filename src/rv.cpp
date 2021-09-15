@@ -138,8 +138,11 @@ VectorizerInterface::lowerRuntimeCalls(VectorizationInfo & vecInfo, FunctionAnal
     if (hostLoop) EmbedInlinedCode(entryBB, *hostLoop, LI, funcBlocks);
   }
   if (Changed) {
-    FAM.invalidate<DominatorTreeAnalysis>(vecInfo.getScalarFunction());
-    FAM.invalidate<PostDominatorTreeAnalysis>(vecInfo.getScalarFunction());
+    // FAM.invalidate<DominatorTreeAnalysis>(vecInfo.getScalarFunction());
+    // FAM.invalidate<PostDominatorTreeAnalysis>(vecInfo.getScalarFunction());
+    PreservedAnalyses PA;
+    PA.preserve<LoopAnalysis>();
+    FAM.invalidate(vecInfo.getScalarFunction(), PA);
   }
 }
 

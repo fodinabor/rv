@@ -144,10 +144,12 @@ public:
       auto & tmpLI = FAM.getResult<LoopAnalysis>(*clonedFunc);
       LoopExitCanonicalizer canonicalizer(tmpLI);
       canonicalizer.canonicalize(*clonedFunc);
-      FAM.invalidate<DominatorTreeAnalysis>(*clonedFunc);
-      FAM.invalidate<PostDominatorTreeAnalysis>(*clonedFunc);
-      // invalidate & recompute LI
-      FAM.invalidate<LoopAnalysis>(*clonedFunc);
+      // FAM.invalidate<DominatorTreeAnalysis>(*clonedFunc);
+      // FAM.invalidate<PostDominatorTreeAnalysis>(*clonedFunc);
+      // // invalidate & recompute LI
+      // FAM.invalidate<LoopAnalysis>(*clonedFunc);
+      // FAM.getResult<LoopAnalysis>(*clonedFunc);
+      FAM.invalidate(*clonedFunc, PreservedAnalyses::none());
       FAM.getResult<LoopAnalysis>(*clonedFunc);
     }
 

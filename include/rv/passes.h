@@ -23,9 +23,11 @@ void addAutoMathPass(llvm::ModulePassManager &MPM);
 
 // add normalization passes required by RV (BEFORE)
 void addPreparatoryPasses(llvm::ModulePassManager &MPM);
+void addPreparatoryPasses(llvm::FunctionPassManager &FPM);
 
 // add cleanup passes to run after RV (AFTER)
 void addCleanupPasses(llvm::ModulePassManager &FPM);
+void addCleanupPasses(llvm::FunctionPassManager &FPM);
 
 // add RV's outer loop vectorizer and required passes.
 void addOuterLoopVectorizer(llvm::FunctionPassManager &FPM);

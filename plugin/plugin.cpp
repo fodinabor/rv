@@ -17,6 +17,9 @@ llvm::PassPluginLibraryInfo getRVPLUGPluginInfo() {
 #ifndef LLVM_RVPLUG_LINK_INTO_TOOLS
 extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
 llvmGetPassPluginInfo() {
+  llvm::outs() << "RV says hi..\n";
   return getRVPLUGPluginInfo();
 }
+#else
+#error "beeep"
 #endif

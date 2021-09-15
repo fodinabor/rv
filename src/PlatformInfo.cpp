@@ -20,6 +20,7 @@
 #include <llvm/Support/TypeSize.h>
 
 #include "rvConfig.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
 
 #include <sstream>
 
@@ -56,7 +57,7 @@ GetBuiltinMapping(Function & F, VectorMapping & KnownMapping) {
 
 void
 PlatformInfo::registerDeclareSIMDFunction(Function & F) {
-  auto attribSet = F.getAttributes().getFnAttributes();
+  auto attribSet = F.getAttributes().getFnAttrs();
   // parse SIMD signatures
   std::vector<VectorMapping> wfvJobs;
   for (auto attrib : attribSet) {
@@ -192,7 +193,7 @@ PlatformInfo::getMaxVectorWidth() const {
 
 size_t
 PlatformInfo::getMaxVectorBits() const {
-  return mTTI->getRegisterBitWidth(true);
+  return mTTI->getRegisterBitWidth(TargetTransformInfo::RGK_FixedWidthVector);
 }
 
 void

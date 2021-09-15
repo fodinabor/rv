@@ -87,7 +87,7 @@ CostModel::IsVectorizableFunction(Function & callee) const {
   }
 
 // in case of Vector Function ABi strings in the functions attributes assume the right version will become available at widening time
-  auto attribSet = callee.getAttributes().getFnAttributes();
+  auto attribSet = callee.getAttributes().getFnAttrs();
 
   for (auto attrib : attribSet) {
     if (!attrib.isStringAttribute()) continue;

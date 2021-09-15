@@ -48,7 +48,7 @@ void addPreparatoryPasses(ModulePassManager &MPM) {
   MPM.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(FPM)));
 }
 
-static void addCleanupPasses(FunctionPassManager &FPM) {
+void addCleanupPasses(FunctionPassManager &FPM) {
   // post rv cleanup
   FPM.addPass(AggressiveInstCombinePass());
   FPM.addPass(ADCEPass());

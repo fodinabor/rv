@@ -90,7 +90,7 @@ bool LoopExitCanonicalizer::canonicalize(Function &F) {
     canonicalizeLoop(L);
   }
 
-  return false;
+  return true;
 }
 
 void LoopExitCanonicalizer::canonicalizeLoop(Loop *loop) const {

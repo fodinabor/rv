@@ -25,6 +25,9 @@
 
 #include "rv/config.h"
 #include "rv/rvDebug.h"
+#include "llvm/Analysis/OptimizationRemarkEmitter.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
 #ifdef RV_ENABLE_LOOPDIST
 #include "rv/transform/loopDistTrans.h"
 #endif
@@ -46,7 +49,7 @@
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 
-#include "llvm/Analysis/LoopDependenceAnalysis.h"
+// #include "llvm/Analysis/LoopDependenceAnalysis.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <sstream>
@@ -299,25 +302,25 @@ bool LoopVectorizer::scoreLoop(LoopJob &LJ, LoopScore &LS, Loop &L) {
     mdAnnot.vectorizeEnable = true;
 
     // Check whether this loop is actually parallel (expensive)
-  } else if (AutoDetectParallelLoops()) {
+  // } else if (AutoDetectParallelLoops()) {
 
-    // Auto-detect vectorizable loops with the LoopDependenceAnalysis
-    auto &LDI = FAM.getResult<LoopDependenceAnalysis>(*F);
-    auto DepInfo = LDI.getDependenceInfo(L);
-    if (!DepInfo.VectorizationFactor.hasValue()) {
-      if (enableDiagOutput) {
-        Report() << "loopVecPass: LDI: parallel loop " << L.getName() << "\n";
-      }
-      mdAnnot.minDepDist = ParallelDistance;
-      mdAnnot.vectorizeEnable = true;
-    } else if (DepInfo.VectorizationFactor.getValue() > 1) {
-      mdAnnot.minDepDist = DepInfo.VectorizationFactor.getValue();
-      mdAnnot.vectorizeEnable = true;
-      if (enableDiagOutput) {
-        Report() << "loopVecPass: LDI: loop " << L.getName() << " with dep dist"
-                 << mdAnnot.minDepDist.get() << "\n";
-      }
-    }
+  //   // Auto-detect vectorizable loops with the LoopDependenceAnalysis
+  //   auto &LDI = FAM.getResult<LoopDependenceAnalysis>(*F);
+  //   auto DepInfo = LDI.getDependenceInfo(L);
+  //   if (!DepInfo.VectorizationFactor.hasValue()) {
+  //     if (enableDiagOutput) {
+  //       Report() << "loopVecPass: LDI: parallel loop " << L.getName() << "\n";
+  //     }
+  //     mdAnnot.minDepDist = ParallelDistance;
+  //     mdAnnot.vectorizeEnable = true;
+  //   } else if (DepInfo.VectorizationFactor.getValue() > 1) {
+  //     mdAnnot.minDepDist = DepInfo.VectorizationFactor.getValue();
+  //     mdAnnot.vectorizeEnable = true;
+  //     if (enableDiagOutput) {
+  //       Report() << "loopVecPass: LDI: loop " << L.getName() << " with dep dist"
+  //                << mdAnnot.minDepDist.get() << "\n";
+  //     }
+  //   }
   }
 
   if (enableDiagOutput) {
@@ -774,9 +777,10 @@ bool LoopVectorizer::vectorizeLoopRegions() {
   for (auto &LVJob : LoopsToVectorize) {
     // FIXME repair loop info on the go
     // Rebuild analysis structured
-    FAM.invalidate<DominatorTreeAnalysis>(*F);
-    FAM.invalidate<PostDominatorTreeAnalysis>(*F);
-    FAM.invalidate<LoopAnalysis>(*F);
+    // FAM.invalidate<DominatorTreeAnalysis>(*F);
+    // FAM.invalidate<PostDominatorTreeAnalysis>(*F);
+    // FAM.invalidate<LoopAnalysis>(*F);
+    FAM.invalidate(*F, PreservedAnalyses::none());
 
     Changed |= vectorizeLoop(LVJob);
   }
@@ -789,6 +793,7 @@ bool LoopVectorizer::runOnFunction(Function &F) {
   // have we introduced ourself? (reporting output)
   enableDiagOutput = CheckFlag("LV_DIAG");
   introduced = false;
+  outs() << "LV with diag: " << enableDiagOutput << "\n";
 
   if (getenv("RV_DISABLE"))
     return false;
@@ -814,14 +819,18 @@ bool LoopVectorizer::runOnFunction(Function &F) {
 
   this->config = Config::createForFunction(F);
   this->F = &F;
-  TargetTransformInfo &PassTTI =
-      getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F); // FIXME use FAM
-  TargetLibraryInfo &PassTLI =
-      getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F); // FIXME use FAM
-  this->ORE = &getAnalysis<OptimizationRemarkEmitterWrapperPass>().getORE();
+  // TargetTransformInfo &PassTTI =
+  //     getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F); // FIXME use FAM
+  // TargetLibraryInfo &PassTLI =
+  //     getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F); // FIXME use FAM
+  // this->ORE = &getAnalysis<OptimizationRemarkEmitterWrapperPass>().getORE();
 
-  if (!this->config.useVE)
-    return false;
+  TargetTransformInfo &PassTTI = FAM.getResult<TargetIRAnalysis>(F);
+  TargetLibraryInfo &PassTLI = FAM.getResult<TargetLibraryAnalysis>(F);
+  this->ORE = &FAM.getResult<OptimizationRemarkEmitterAnalysis>(F);
+
+  // if (!this->config.useVE)
+  //   return false;
 
   // setup PlatformInfo
   PlatformInfo platInfo(*F.getParent(), &PassTTI, &PassTLI);

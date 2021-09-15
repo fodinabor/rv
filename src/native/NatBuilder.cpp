@@ -1420,7 +1420,7 @@ MayRecurse(const Function &F) {
 
 static void
 CopyTargetAttributes(Function & destFunc, Function & srcFunc) {
-  auto attribSet = srcFunc.getAttributes().getFnAttributes();
+  auto attribSet = srcFunc.getAttributes().getFnAttrs();
 
   // parse SIMD signatures
   for (auto attrib : attribSet) {
@@ -1941,7 +1941,7 @@ Value *NatBuilder::createContiguousLoad(Value *elemPtr, Align alignment, Mask ve
   auto VecElemPtrTy = ScaElemTy->getPointerTo(ElemPtrTy->getPointerAddressSpace());
   auto VecPtr = builder.CreatePointerCast(elemPtr, VecElemPtrTy);
   if (!vecMask.knownAllTrue()) {
-    return builder.CreateMaskedLoad(VecPtr, alignment, vecMask.getPred(), passThru, "cont_load");
+    return builder.CreateMaskedLoad(VecElemPtrTy, VecPtr, alignment, vecMask.getPred(), passThru, "cont_load");
 
   } else {
     LoadInst *load = builder.CreateLoad(VecPtr, "cont_load");
@@ -2916,6 +2916,7 @@ NatBuilder::materializeOrderedReduction(Reduction & red, PHINode & scaPhi) {
 
 void
 NatBuilder::materializeVaryingReduction_AVL(Reduction & red, PHINode & scaPhi) {
+  #ifdef LLVM_HAVE_VP
   assert((red.kind != RedKind::Top) && (red.kind != RedKind::Bot));
 
   const auto vectorWidth = vecInfo.getVectorWidth();
@@ -3005,6 +3006,9 @@ NatBuilder::materializeVaryingReduction_AVL(Reduction & red, PHINode & scaPhi) {
                     }
     );
   }
+  #else
+  assert(false && "no VP support");
+  #endif
 }
 
 void

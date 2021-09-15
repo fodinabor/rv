@@ -125,6 +125,7 @@ void addFunctionPasses(ModulePassManager &MPM,
 static bool
 buildDefaultRVPipeline(StringRef, ModulePassManager &MPM,
                        ArrayRef<PassBuilder::PipelineElement> Elems) {
+  outs() << "default pipeline\n";
   // normalize loops
   rv::addPreparatoryPasses(MPM);
 
@@ -142,6 +143,21 @@ buildDefaultRVPipeline(StringRef, ModulePassManager &MPM,
 
 namespace rv {
 void addConfiguredPasses(PassBuilder &PB) {
-  PB.registerPipelineParsingCallback(buildDefaultRVPipeline);
+  outs() << "configured passes\n";
+  // PB.registerPipelineParsingCallback([](StringRef Name, ModulePassManager & MPM,
+  //                              ArrayRef<PassBuilder::PipelineElement> Elems) -> bool { return buildDefaultRVPipeline(Name, MPM, Elems); });
+  PB.registerVectorizerStartEPCallback([](llvm::FunctionPassManager& FPM, OptimizationLevel){
+    rv::addPreparatoryPasses(FPM);
+    rv::addOuterLoopVectorizer(FPM);
+    rv::addCleanupPasses(FPM); // missing always inliner...?
+  });
+
+  PB.registerScalarOptimizerLateEPCallback([](llvm::FunctionPassManager& FPM, OptimizationLevel){
+    rv::addLowerBuiltinsPass(FPM);
+  });
+
+  PB.registerOptimizerLastEPCallback([](llvm::ModulePassManager& FPM, OptimizationLevel){
+    rv::addAutoMathPass(FPM);
+  });
 }
 } // namespace rv

@@ -642,10 +642,16 @@ struct SleefVLAResolver : public FunctionResolver {
       LoopInfo &LI = FAM.getResult<LoopAnalysis>(*clonedFunc);
       LoopExitCanonicalizer canonicalizer(LI);
       canonicalizer.canonicalize(*clonedFunc);
-      FAM.invalidate<DominatorTreeAnalysis>(*clonedFunc);
-      FAM.invalidate<PostDominatorTreeAnalysis>(*clonedFunc);
-      // invalidate & recompute LI
-      FAM.invalidate<LoopAnalysis>(*clonedFunc);
+      // FAM.invalidate<DominatorTreeAnalysis>(*clonedFunc);
+      // FAM.invalidate<PostDominatorTreeAnalysis>(*clonedFunc);
+      // // invalidate & recompute LI
+      // FAM.invalidate<LoopAnalysis>(*clonedFunc);
+      // FAM.getResult<LoopAnalysis>(*clonedFunc);
+      PreservedAnalyses PA;
+      PA.preserve<ScalarEvolutionAnalysis>();
+      PA.preserve<MemoryDependenceAnalysis>();
+      PA.preserve<BranchProbabilityAnalysis>();
+      FAM.invalidate(*clonedFunc, PA);
       FAM.getResult<LoopAnalysis>(*clonedFunc);
     }
 

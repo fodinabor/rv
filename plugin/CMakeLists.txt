@@ -7,6 +7,5 @@ add_llvm_pass_plugin(RVPLUG
   DEPENDS
   RV
   intrinsics_gen
-  BUILDTREE_ONLY
  )
 target_link_libraries(RVPLUG PRIVATE RV)
