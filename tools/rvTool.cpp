@@ -9,6 +9,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <limits>
 #include <sstream>
 
 #include "llvm/IR/Constants.h"
@@ -52,6 +53,7 @@
 #include "rv/vectorizationInfo.h"
 
 #include "rv/analysis/reductionAnalysis.h"
+#include "rv/analysis/loopAnnotations.h"
 #include "rv/transform/loopExitCanonicalizer.h"
 #include "rv/transform/remTransform.h"
 #include "rv/transform/singleReturnTrans.h"
@@ -146,7 +148,7 @@ void vectorizeLoop(Function &parentFn, Loop &TheLoop, unsigned vectorWidth,
       TheLoop, uniOverrides, vectorWidth, 1);
 
   if (!preparedLoop) {
-    fail("remTrans could not transform to a vectorizable loop.");
+    fail(("remTrans could not transform " + TheLoop.getName() + " to a vectorizable loop.").str());
   }
 
   // configure RV
@@ -288,17 +290,17 @@ void vectorizeFirstLoop(Function &parentFn, unsigned vectorWidth, int ulpErrorBo
     LI.print(errs());
   }
 
-  // the loop to vectorize
-  auto *firstLoop = *LI.begin();
-
-  // HAVE TO maintain FAM.getCachedResult<LoopAnalysis> from this point on! (or
-  // the loop region gets invalidated)
-
-  vectorizeLoop(parentFn, *firstLoop, vectorWidth, ulpErrorBound, FAM);
-
-  // mark region
-  // run RV
-  // replace stride
+  // vectorize all outer parallel loops in loop nest
+  llvm::SmallVector<llvm::Loop*, 32> WL{LI.getTopLevelLoopsVector().begin(), LI.getTopLevelLoopsVector().end()};
+   while(!WL.empty()) {
+    auto* L = WL.pop_back_val();
+    auto annot = rv::GetLoopAnnotation(*L);
+    if(annot.vectorizeEnable.isSet() && annot.vectorizeEnable.get() && L->isAnnotatedParallel()){
+      vectorizeLoop(parentFn, *L, vectorWidth, ulpErrorBound, FAM);
+    } else {
+      WL.append(L->getSubLoopsVector().begin(), L->getSubLoopsVector().end());
+    }
+  }
 }
 using ShapeMap = std::map<std::string, rv::VectorShape>;
 
