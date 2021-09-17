@@ -601,8 +601,7 @@ Linearizer::createSuperInput(PHINode & phi, SuperInput & superInput) {
 // we will need blending: create a block for that to take place
   if (!superInput.blendBlock) {
     auto & joinBlock = *phi.getParent();
-    auto superBlockName = joinBlock.getName() + ".s";
-    superInput.blendBlock = BasicBlock::Create(phi.getContext(), superBlockName, phi.getParent()->getParent(), phi.getParent());
+    superInput.blendBlock = BasicBlock::Create(phi.getContext(), joinBlock.getName() + ".s", phi.getParent()->getParent(), phi.getParent());
     auto * blockLoop = GetCommonLoop(li, blocks); // FIXME this does not apply to loop header inputs..
     if (blockLoop) {
       blockLoop->addBasicBlockToLoop(superInput.blendBlock, li);
