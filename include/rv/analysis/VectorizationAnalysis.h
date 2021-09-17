@@ -60,11 +60,11 @@ class VectorizationAnalysis {
   std::unordered_set<const llvm::Instruction *> mOnWorklist;
 
   const llvm::DataLayout &layout;
-  const llvm::LoopInfo &LI; // Preserves LoopInfo
-  const llvm::DominatorTree &DT;
+  llvm::LoopInfo LI; // Preserves LoopInfo
+  llvm::DominatorTree DT;
 
   // Divergence computation:
-  llvm::SyncDependenceAnalysis SDA;
+  std::unique_ptr<llvm::SyncDependenceAnalysis> SDA;
   PredicateAnalysis PredA;
 
   FunctionRegion funcRegion;
