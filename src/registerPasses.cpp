@@ -88,3 +88,5 @@ static llvm::RegisterStandardPasses
 static llvm::RegisterStandardPasses
     RegisterRV_Late(llvm::PassManagerBuilder::EP_ScalarOptimizerLate,
                     registerLateRVPasses);
+
+extern "C" void testme() {}

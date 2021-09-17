@@ -12,6 +12,7 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "rv/config.h"
 
 namespace rv {
@@ -21,7 +22,7 @@ namespace rv {
   void addRVPasses(llvm::legacy::PassManagerBase & PM);
 
   // add all passes of RV to the pass pipeline MPM.
-  void addRVPasses(llvm::ModulePassManager & MPM);
+  void addRVPasses(llvm::ModulePassManager & MPM, llvm::PassBuilder::OptimizationLevel);
 
 // fine-grained pass adding
   // RV-based loop vectorizer pass

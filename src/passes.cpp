@@ -8,6 +8,7 @@
 
 #include "rv/passes.h"
 
+#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils.h"
 #include "llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h"
@@ -24,7 +25,8 @@
 using namespace llvm;
 
 namespace rv {
-
+extern "C" void testme();
+static bool asdf = [](){testme(); return true;}();
 
 
 void
@@ -128,7 +130,7 @@ addLowerBuiltinsPass(ModulePassManager & MPM) {
 }
 
 void
-addRVPasses(ModulePassManager & MPM) {
+addRVPasses(ModulePassManager & MPM, PassBuilder::OptimizationLevel) {
   // normalize loops
   addPreparatoryPasses(MPM);
 

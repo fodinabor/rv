@@ -10,13 +10,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Passes/PassPlugin.h"
-
 #ifndef RV_REGISTERPASSES_H
 #define RV_REGISTERPASSES_H
 
+#include "llvm/Passes/PassPlugin.h"
+#include "llvm/Passes/PassBuilder.h"
+
 namespace rv {
-  void addRVPasses(llvm::PassBuilder & PB);
+  void addRVPasses(llvm::ModulePassManager & MPM, llvm::PassBuilder::OptimizationLevel);
 }
 
 #endif // RV_REGISTERPASSES_H
