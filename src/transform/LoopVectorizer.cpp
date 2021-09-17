@@ -116,7 +116,7 @@ IsSupportedReduction(Loop & L, Reduction & red) {
       if (!userInst) return false; // unsupported
       if (L.contains(userInst->getParent()) &&
         !red.elements.count(userInst))  {
-        errs() << "Unsupported user of reduction: "; Dump(*userInst); 
+        errs() << "Unsupported user of reduction: "; Dump(*userInst); errs() << "\n"; 
         return false;
       }
     }
