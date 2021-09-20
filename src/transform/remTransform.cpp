@@ -590,7 +590,7 @@ struct LoopTransformer {
     IRBuilder<> builder(&vecHead, vecHead.getTerminator()->getIterator());
 
     auto & exitVal =
-      exitConditionBuilder.synthesize(2 * vectorWidth, ".vecExit", builder, &uniOverrides,
+      exitConditionBuilder.synthesize(2 * vectorWidth - 1, ".vecExit", builder, &uniOverrides,
          [&](Instruction & inst) -> IterValue {
            assert (!isa<CallInst>(inst));
 
