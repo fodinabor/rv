@@ -81,6 +81,12 @@ CostModel::IsVectorizableFunction(Function & callee) const {
       return true;
   }
 
+  // we can always vectorize rv_* intrinsics
+  // this ignores the vector shape requirements but as those are
+  // imprecise in CM right now, rely on the user to use them correctly..
+  if(GetIntrinsicID(callee) != RVIntrinsic::Unknown)
+    return true;
+    
 // in case of Vector Function ABi strings in the functions attributes assume the right version will become available at widening time
   auto attribSet = callee.getAttributes().getFnAttributes();
 
@@ -122,7 +128,10 @@ CostModel::pickWidthForInstruction(const Instruction & inst, size_t maxWidth) co
     VectorShapeVec topArgVec;
     for (int i = 0; i < (int) call->getNumArgOperands(); ++i) {
       // botArgVec.push_back(VectorShape::undef()); // FIXME this causes divergence in the VA
-      topArgVec.push_back(VectorShape::varying());
+      if(auto constVal = dyn_cast<Constant>(call->getArgOperand(i))) // FIXME: use VA..
+        topArgVec.push_back(VectorShape::fromConstant(constVal));
+      else
+        topArgVec.push_back(VectorShape::varying());
     }
 
     // find widest available implementation
