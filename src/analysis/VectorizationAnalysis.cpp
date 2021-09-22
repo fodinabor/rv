@@ -339,8 +339,8 @@ void VectorizationAnalysis::compute(const Function &F) {
     for (auto *ptr : taintedPtrOps) {
       const auto &prov = allocaSSA.getProvenance(*ptr);
       for (const auto *allocaInst : prov.allocs) {
-        // Out-of-region allocas are shared
-        if (!vecInfo.inRegion(*allocaInst))
+        // Out-of-region allocas are shared and not varying store.
+        if (!vecInfo.inRegion(*allocaInst) && !(New.isVarying() && isa<StoreInst>(I)))
           continue;
 
         // In-region allocas are private
@@ -519,7 +519,7 @@ bool VectorizationAnalysis::updateShape(const Value &V, VectorShape AT) {
   vecInfo.setVectorShape(V, New);
 
   // Add dependent elements to worklist
-  pushUsers(V);
+  pushUsers(V, true);
 
   return true;
 }
@@ -543,7 +543,7 @@ void VectorizationAnalysis::pushPredicatedInsts(const llvm::BasicBlock &BB) {
   }
 }
 
-void VectorizationAnalysis::pushUsers(const Value &V) {
+void VectorizationAnalysis::pushUsers(const Value &V, bool IgnoreRegion) {
   IF_DEBUG_VA { errs() << "VA: Pushing users of " << V << "\n"; }
   // Push users of this value
   for (const auto user : V.users()) {
@@ -552,7 +552,7 @@ void VectorizationAnalysis::pushUsers(const Value &V) {
     const Instruction &inst = cast<Instruction>(*user);
 
     // We are only analyzing the region
-    if (!vecInfo.inRegion(inst))
+    if (!IgnoreRegion && !vecInfo.inRegion(inst))
       continue;
 
     putOnWorklist(inst);

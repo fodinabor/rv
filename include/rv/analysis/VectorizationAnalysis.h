@@ -131,7 +131,7 @@ private:
   bool pushMissingOperands(const llvm::Instruction &I);
 
   // push all users of @V to the worklist.
-  void pushUsers(const llvm::Value &V);
+  void pushUsers(const llvm::Value &V, bool IgnoreRegion = false);
 
   // add all instruction of \p BB to the WL that dependend on the shape of the predicate.
   // (eg functions with side effects)
