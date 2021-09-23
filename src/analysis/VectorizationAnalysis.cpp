@@ -17,14 +17,11 @@
 
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/PostDominators.h"
-#include "llvm/Analysis/SyncDependenceAnalysis.h"
 #include "llvm/IR/Dominators.h"
-#include "llvm/Analysis/CFG.h"
 
 #include "report.h"
 #include <fstream>
 
-#include <memory>
 #include <numeric>
 
 #if 1
@@ -47,19 +44,16 @@ VectorizationAnalysis::VectorizationAnalysis(Config _config,
                                              FunctionAnalysisManager &FAM)
     : config(_config), platInfo(platInfo), vecInfo(VecInfo),
       layout(platInfo.getDataLayout()),
+      LI(*FAM.getCachedResult<LoopAnalysis>(vecInfo.getScalarFunction())),
+      DT(FAM.getResult<DominatorTreeAnalysis>(vecInfo.getScalarFunction())),
+      SDA(DT,
+          FAM.getResult<PostDominatorTreeAnalysis>(vecInfo.getScalarFunction()),
+          LI),
       PredA(vecInfo, FAM.getResult<PostDominatorTreeAnalysis>(
                          vecInfo.getScalarFunction())),
       funcRegion(vecInfo.getScalarFunction()),
       funcRegionWrapper(funcRegion), // FIXME
       allocaSSA(funcRegionWrapper) {
-
-  // need up-to-date LI for SDA not to run endlessly, but must not update FAMs LI..
-  DT = DominatorTree(vecInfo.getScalarFunction());
-  LI = LoopInfo(DT);
-  
-  SDA.reset(new SyncDependenceAnalysis(DT,
-          FAM.getResult<PostDominatorTreeAnalysis>(vecInfo.getScalarFunction()),
-          LI));
   // compute pointer provenance
   allocaSSA.compute();
   IF_DEBUG_VA allocaSSA.print(errs());
@@ -246,7 +240,7 @@ void VectorizationAnalysis::propagateControlDivergence(
   // divergent due to divergence in in \p Term.
 
   // Disjoint-paths joins.
-  const auto &DivDesc = SDA->getJoinBlocks(rootNode);
+  const auto &DivDesc = SDA.getJoinBlocks(rootNode);
 
   for (const BasicBlock *JoinBlock : DivDesc.JoinDivBlocks) {
     vecInfo.addJoinDivergentBlock(*JoinBlock);
