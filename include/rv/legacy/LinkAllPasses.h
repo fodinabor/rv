@@ -11,7 +11,7 @@
 #define RV_LINKALLPASSES_H
 
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "rv/passes.h"
+#include "rv/legacy/passes.h"
 
 #include <cstdlib>
 
@@ -19,12 +19,14 @@ namespace llvm {
 class Pass;
 class PassRegistry;
 
-void initializeLoopVectorizerPass(PassRegistry&);
-void initializeWFVPassPass(PassRegistry&);
-void initializeIRPolisherWrapperPass(PassRegistry&);
-void initializeLowerRVIntrinsicsPass(PassRegistry&);
+void initializeIRPolisherLegacyPassPass(PassRegistry&);
+void initializeLoopVectorizerLegacyPassPass(PassRegistry&);
+void initializeLowerRVIntrinsicsLegacyPassPass(PassRegistry&);
+void initializeWFVLegacyPassPass(PassRegistry&);
+void initializeLoopExitCanonicalizerLegacyPassPass(PassRegistry&);
 } // namespace llvm
 
+namespace rv {void keepPassRegistration();}
 namespace {
 struct RVForcePassLinking {
   RVForcePassLinking() {
@@ -35,11 +37,12 @@ struct RVForcePassLinking {
     if (std::getenv("bar") != (char *)-1)
       return;
 
-    // rv::createWFVPass();
-    rv::createLoopVectorizerPass();
-    rv::createIRPolisherWrapperPass();
-    rv::createWFVPass();
-    rv::createLowerRVIntrinsicsPass();
+    rv::createIRPolisherLegacyPass();
+    rv::createLoopVectorizerLegacyPass();
+    rv::createLowerRVIntrinsicsLegacyPass();
+    rv::createWFVLegacyPass();
+    rv::createLoopExitCanonicalizerLegacyPass();
+    rv::keepPassRegistration();
   }
 } RVForcePassLinking; // Force link by creating a global definition.
 

@@ -23,7 +23,9 @@
 #include "rv/analysis/VectorizationAnalysis.h"
 #include "rv/intrinsics.h"
 
-#include "rv/transform/loopExitCanonicalizer.h"
+// Transform also exposed as LLVM passes
+#include "rv/passes/irPolisher.h"
+#include "rv/passes/loopExitCanonicalizer.h"
 #include "rv/transform/divLoopTrans.h"
 #include "rv/transform/guardedDivLoopTrans.h"
 
@@ -31,17 +33,17 @@
 #include "rv/vectorizationInfo.h"
 #include "rv/analysis/reductionAnalysis.h"
 
-#include "rv/transform/Linearizer.h"
-
-#include "rv/transform/splitAllocas.h"
-#include "rv/transform/structOpt.h"
-#include "rv/transform/srovTransform.h"
-#include "rv/transform/irPolisher.h"
-#include "rv/transform/bosccTransform.h"
+// RV internal transformations.
 #include "rv/transform/CoherentIFTransform.h"
-#include "rv/transform/redOpt.h"
-#include "rv/transform/memCopyElision.h"
+#include "rv/transform/Linearizer.h"
+#include "rv/transform/bosccTransform.h"
+#include "rv/transform/guardedDivLoopTrans.h"
 #include "rv/transform/lowerDivergentSwitches.h"
+#include "rv/transform/memCopyElision.h"
+#include "rv/transform/redOpt.h"
+#include "rv/transform/splitAllocas.h"
+#include "rv/transform/srovTransform.h"
+#include "rv/transform/structOpt.h"
 
 #include "native/NatBuilder.h"
 
@@ -278,8 +280,8 @@ VectorizerInterface::vectorize(VectorizationInfo &vecInfo, FunctionAnalysisManag
 
   // IR Polish phase: promote i1 vectors and perform early instruction (read: intrinsic) selection
   if (config.enableIRPolish) {
-    IRPolisher polisher(vecInfo.getVectorFunction(), config);
-    polisher.polish();
+    IRPolisher Polisher(vecInfo.getVectorFunction());
+    Polisher.polish();
     Report() << "IR Polisher enabled (RV_ENABLE_POLISH != 0)\n";
   }
 

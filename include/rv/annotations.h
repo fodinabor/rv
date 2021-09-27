@@ -22,6 +22,8 @@ namespace rv {
 
   void SetReductionHint(llvm::PHINode & loopHeaderPhi, RedKind redKind);
   RedKind ReadReductionHint(const llvm::PHINode & loopHeaderPhi);
+
+  bool IsHipSYCLKernel(const llvm::Function & func);
 }
 
 #endif

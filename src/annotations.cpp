@@ -13,6 +13,7 @@
 #include <cassert>
 
 #include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Constants.h"
@@ -63,6 +64,25 @@ ReadReductionHint(const llvm::PHINode & loopHeaderPhi) {
   bool parsed = from_string(boxedRedCode->getString(), kind);
   assert(parsed);
   return kind;
+}
+
+bool IsHipSYCLKernel(const llvm::Function &F) {
+  for (auto &I : F.getParent()->globals()) {
+    if (I.getName() == "llvm.global.annotations") {
+      auto *CA = llvm::dyn_cast<llvm::ConstantArray>(I.getOperand(0));
+      for (auto *OI = CA->op_begin(); OI != CA->op_end(); ++OI) {
+        auto *CS = llvm::dyn_cast<llvm::ConstantStruct>(OI->get());
+        auto *AnnotFunc = llvm::dyn_cast<llvm::Function>(CS->getOperand(0)->getOperand(0));
+        auto *AnnotationGL = llvm::dyn_cast<llvm::GlobalVariable>(CS->getOperand(1)->getOperand(0));
+        llvm::StringRef Annotation =
+            llvm::dyn_cast<llvm::ConstantDataArray>(AnnotationGL->getInitializer())->getAsCString();
+        if (Annotation.compare("hipsycl_nd_kernel") == 0 && AnnotFunc == &F) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 }

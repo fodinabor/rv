@@ -59,7 +59,7 @@ namespace rv {
     Optional<iter_t> minDepDist;
 
     // marked as hipSYCL work item loop
-    bool hipsyclWiLoop;
+    bool hipsyclWiLoop = false;
 
     llvm::raw_ostream& print(llvm::raw_ostream & out) const;
     void dump() const;

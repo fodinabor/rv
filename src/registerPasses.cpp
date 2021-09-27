@@ -6,11 +6,17 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "rv/registerPasses.h"
 #include "rv/passes.h"
+#include "rv/legacy/passes.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Passes/PassPlugin.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+
+#include "rv/passes/WFVPass.h"
+#include "rv/passes/LoopVectorizer.h"
+#include "rv/passes/irPolisher.h"
 
 using namespace llvm;
 
@@ -51,42 +57,113 @@ static bool shouldRunLoopVecPass() {
 static bool shouldLowerBuiltins() { return rvLowerBuiltins; }
 
 ///// Legacy PM pass registration /////
-static void registerRVPasses(const llvm::PassManagerBuilder &Builder,
+static void registerLegacyRVPasses(const llvm::PassManagerBuilder &Builder,
                              llvm::legacy::PassManagerBase &PM) {
   if (rvOnlyPolish) {
-    PM.add(rv::createIRPolisherWrapperPass());
+    PM.add(rv::createIRPolisherLegacyPass());
     return;
   }
 
   if (mayVectorize()) {
-    rv::addPreparatoryPasses(PM);
+    rv::addPreparatoryLegacyPasses(PM);
   }
 
   if (shouldRunWFVPass()) {
-    rv::addWholeFunctionVectorizer(PM);
+    PM.add(rv::createWFVLegacyPass());
   }
   if (shouldRunLoopVecPass()) {
-    rv::addOuterLoopVectorizer(PM);
+    PM.add(rv::createLoopVectorizerLegacyPass());
   }
 
   if (mayVectorize()) {
-    rv::addCleanupPasses(PM);
+    rv::addCleanupLegacyPasses(PM);
   }
 }
 
-static void registerLateRVPasses(const llvm::PassManagerBuilder &Builder,
+static void registerLastRVLegacyPasses(const llvm::PassManagerBuilder &Builder,
                                  llvm::legacy::PassManagerBase &PM) {
-  if (shouldLowerBuiltins()) {
-    rv::addLowerBuiltinsPass(PM);
-  }
+  if (shouldLowerBuiltins())
+    PM.add(rv::createLowerRVIntrinsicsLegacyPass());
 }
 
 static llvm::RegisterStandardPasses
     RegisterRV_MidPipeline(llvm::PassManagerBuilder::EP_VectorizerStart,
-                           registerRVPasses);
+                           registerLegacyRVPasses);
 
 static llvm::RegisterStandardPasses
-    RegisterRV_Late(llvm::PassManagerBuilder::EP_OptimizerLast,
-                    registerLateRVPasses);
+    RegisterRV_Last(llvm::PassManagerBuilder::EP_OptimizerLast,
+                    registerLastRVLegacyPasses);
 
-extern "C" void testme() {}
+
+///// New PM setup /////
+
+void rv::addConfiguredRVPasses(PassBuilder &PB) {
+  PB.registerPipelineStartEPCallback(
+      [&](llvm::ModulePassManager &MPM,
+          llvm::PassBuilder::OptimizationLevel Level) {
+        if (mayVectorize())
+          rv::addPreparatoryPasses(MPM);
+      });
+
+  PB.registerVectorizerStartEPCallback(
+      [&](llvm::FunctionPassManager &FPM,
+          llvm::PassBuilder::OptimizationLevel Level) {
+        if (rvOnlyPolish) {
+          FPM.addPass(rv::IRPolisherWrapperPass());
+          return;
+        }
+
+        if (shouldRunLoopVecPass()) {
+          FPM.addPass(rv::LoopVectorizerWrapperPass());
+        }
+      });
+
+  PB.registerOptimizerLastEPCallback(
+      [&](llvm::ModulePassManager &MPM,
+          llvm::PassBuilder::OptimizationLevel Legel) {
+        if (shouldRunWFVPass())
+          MPM.addPass(rv::WFVWrapperPass());
+        if(shouldLowerBuiltins()){
+          llvm::FunctionPassManager FPM;
+          rv::addLowerBuiltinsPass(FPM);
+          MPM.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(FPM)));
+        }
+        if (mayVectorize())
+          rv::addCleanupPasses(MPM);
+      });
+  // PB.registerPipelineParsingCallback(buildDefaultRVPipeline);
+}
+
+#if 0
+void addFunctionPasses(ModulePassManager &MPM,
+                       std::function<void(llvm::FunctionPassManager &)> Adder) {
+  llvm::FunctionPassManager FPM;
+  Adder(FPM);
+  MPM.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(FPM)));
+}
+
+static bool
+buildDefaultRVPipeline(StringRef, ModulePassManager &MPM,
+                       ArrayRef<PassBuilder::PipelineElement> Elems) {
+
+  // normalize loops
+  rv::addPreparatoryPasses(MPM);
+
+  // vectorize scalar functions that have VectorABI attributes
+  rv::addWholeFunctionVectorizer(MPM);
+
+  // vectorize annotated loops
+  addFunctionPasses(MPM, [](auto &FPM) {
+      rv::addOuterLoopVectorizer(FPM);
+  });
+
+  // DCE, instcombine, ..
+  rv::addCleanupLegacyPasses(MPM);
+
+  return true; // FIXME
+}
+#endif
+
+namespace rv{
+void keepPassRegistration() {};
+}

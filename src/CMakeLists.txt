@@ -28,14 +28,12 @@ IF (RV_REBUILD_GENBC)
 endif()
 
 set (RV_LIBRARY_OBJECTS
-  ./Mask.cpp
-  ./MaskBuilder.cpp
   ./PlatformInfo.cpp
   ./annotations.cpp
   ./config.cpp
-  ./init.cpp
   ./intrinsics.cpp
-  ./legact/passes.cpp
+  ./legacy/init.cpp
+  ./legacy/passes.cpp
   ./passes.cpp
   ./registerPasses.cpp
   ./report.cpp
@@ -59,6 +57,11 @@ set (RV_LIBRARY_OBJECTS
   native/NatBuilder.cpp
   native/ShuffleBuilder.cpp
   native/Utils.cpp
+  passes/LoopVectorizer.cpp
+  passes/WFVPass.cpp
+  passes/irPolisher.cpp
+  passes/loopExitCanonicalizer.cpp
+  passes/lowerRVIntrinsics.cpp
   region/FunctionRegion.cpp
   region/LoopRegion.cpp
   region/Region.cpp
@@ -71,18 +74,14 @@ set (RV_LIBRARY_OBJECTS
   shape/vectorShapeTransformer.cpp
   transform/CoherentIFTransform.cpp
   transform/Linearizer.cpp
-  transform/LoopVectorizer.cpp
-  transform/WFVPass.cpp
   transform/bosccTransform.cpp
   # transform/cns/llvmDomination.cpp
   utils/llvmDuplication.cpp
   transform/crtLowering.cpp
+  transform/divLoopTrans.cpp
   transform/guardedDivLoopTrans.cpp
-  transform/irPolisher.cpp
   transform/loopCloner.cpp
-  transform/loopExitCanonicalizer.cpp
   transform/lowerDivergentSwitches.cpp
-  transform/lowerRVIntrinsics.cpp
   transform/maskExpander.cpp
   transform/memCopyElision.cpp
   transform/redOpt.cpp

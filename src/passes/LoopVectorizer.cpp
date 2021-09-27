@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "rv/transform/LoopVectorizer.h"
-#include "rv/LinkAllPasses.h"
+#include "rv/passes/LoopVectorizer.h"
+#include "rv/legacy/LinkAllPasses.h"
 
 #include "rv/rv.h"
 #include "rv/vectorMapping.h"
@@ -21,6 +21,7 @@
 #include "rv/analysis/loopAnnotations.h"
 #include "rv/analysis/reductionAnalysis.h"
 #include "rv/analysis/costModel.h"
+#include "rv/annotations.h"
 #include "rv/transform/remTransform.h"
 
 #include "rv/config.h"
@@ -67,8 +68,7 @@ bool LoopVectorizer::canVectorizeLoop(Loop &L) {
   return true;
 }
 
-int
-LoopVectorizer::getTripAlignment(Loop & L) {
+int LoopVectorizer::getTripAlignment(Loop &L) {
   int tripCount = getTripCount(L);
   if (tripCount > 0) return tripCount;
   return 1;
@@ -82,9 +82,9 @@ bool LoopVectorizer::canAdjustTripCount(Loop &L, int VectorWidth, int TripCount)
   return false;
 }
 
-int
-LoopVectorizer::getTripCount(Loop &L) {
-  auto *BTC = dyn_cast<SCEVConstant>(SE->getBackedgeTakenCount(&L));
+int LoopVectorizer::getTripCount(Loop &L) {
+  auto &SE = FAM.getResult<ScalarEvolutionAnalysis>(F);
+  auto *BTC = dyn_cast<SCEVConstant>(SE.getBackedgeTakenCount(&L));
   if (!BTC)
     return -1;
 
@@ -100,7 +100,7 @@ LoopVectorizer::transformToVectorizableLoop(Loop &L, int VectorWidth, int tripAl
   IF_DEBUG { errs() << "\tCreating scalar remainder Loop for " << L.getName() << "\n"; }
 
   // try to applu the remainder transformation
-  RemainderTransform remTrans(*F, *DT, *PDT, *LI, *reda, PB);
+  RemainderTransform remTrans(F, *DT, *PDT, *LI, *reda, PB);
   auto * preparedLoop = remTrans.createVectorizableLoop(L, uniformOverrides, VectorWidth, tripAlign);
 
   return preparedLoop;
@@ -133,9 +133,20 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
   if (enableDiagOutput) { Report() << "loopVecPass: "; mdAnnot.print(ReportContinue()) << "\n"; }
 
   // only trigger on hipSYCL WI loops
-  if(!mdAnnot.hipsyclWiLoop) {
-    if (enableDiagOutput) Report() << "loopVecPass skip " << L.getName() << " . no hipSYCL WI loop.\n";
-    return false;
+  // if(!mdAnnot.hipsyclWiLoop) {
+  //   if (enableDiagOutput) Report() << "loopVecPass skip " << L.getName() << " . no hipSYCL WI loop.\n";
+  //   return false;
+  // }
+
+  // Trivial case.
+  if (L.isAnnotatedParallel()) {
+    mdAnnot.minDepDist = ParallelDistance;
+    mdAnnot.vectorizeEnable = true;
+  }
+
+  if (enableDiagOutput) {
+    Report() << "loopVecPass: ";
+    mdAnnot.print(ReportContinue()) << "\n";
   }
 
   // only trigger on annotated loops
@@ -159,18 +170,19 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
     return false;
   }
 
-  this->DT = &FAM.getResult<DominatorTreeAnalysis>(*F);
-  this->PDT = &FAM.getResult<PostDominatorTreeAnalysis>(*F);
-  this->SE = &FAM.getResult<ScalarEvolutionAnalysis>(*F);
-  this->MDR = &FAM.getResult<MemoryDependenceAnalysis>(*F);
-  this->PB = &FAM.getResult<BranchProbabilityAnalysis>(*F);
+  this->DT = &FAM.getResult<DominatorTreeAnalysis>(F);
+  this->PDT = &FAM.getResult<PostDominatorTreeAnalysis>(F);
+  this->PB = &FAM.getResult<BranchProbabilityAnalysis>(F);
 
   auto invalidator = [this](int*) {
     PreservedAnalyses PA;
     PA.preserve<LoopAnalysis>();
-    FAM.invalidate(*F, PA);
+    FAM.invalidate(F, PA);
   };
   std::unique_ptr<int, decltype(invalidator)> invalidateGuard{new int(0), std::move(invalidator)};
+
+  if(CheckFlag("LV_VIEW_CFG"))
+    L.getHeader()->getParent()->viewCFG();
 
   int tripAlign = getTripAlignment(L);
 
@@ -190,7 +202,8 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
   if (!hasFixedWidth) {
     size_t initialWidth = VectorWidth == 0 ? depDist : VectorWidth;
 
-    CostModel costModel(vectorizer->getPlatformInfo(), config);
+    // Re-fine using cost model
+    CostModel costModel(vectorizer->getPlatformInfo(), RVConfig);
     LoopRegion tmpLoopRegionImpl(L);
     Region tmpLoopRegion(tmpLoopRegionImpl);
     size_t refinedWidth = costModel.pickWidthForRegion(tmpLoopRegion, initialWidth); // TODO run VA first
@@ -209,12 +222,13 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
   }
 
   Report() << "loopVecPass: Vectorize " << L.getName()
+           << " in " << L.getHeader()->getParent()->getName()
            << " with VW: " << VectorWidth
            << " , Dependence Distance: " << DepDistToString(depDist)
            << " and TripAlignment: " << tripAlign << "\n";
 
 // analyze the recurrsnce patterns of this loop
-  reda.reset(new ReductionAnalysis(*F, FAM));
+  reda.reset(new ReductionAnalysis(F, FAM));
   reda->analyze(L);
 
 // match vector loop structure
@@ -236,18 +250,21 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
   // print configuration banner once
   if (!introduced) {
     Report() << " rv::Config: ";
-    config.print(ReportContinue());
+    RVConfig.print(ReportContinue());
     introduced = true;
   }
 
 // start vectorizing the prepared loop
   IF_DEBUG { errs() << "rv: Vectorizing loop " << L.getName() << "\n"; }
+  
+  if(CheckFlag("LV_VIEW_CFG"))
+    L.getHeader()->getParent()->viewCFG();
 
-  VectorMapping targetMapping(F, F, VectorWidth, CallPredicateMode::SafeWithoutPredicate);
+  VectorMapping targetMapping(&F, &F, VectorWidth, CallPredicateMode::SafeWithoutPredicate);
   LoopRegion LoopRegionImpl(*PreparedLoop);
   Region LoopRegion(LoopRegionImpl);
 
-  VectorizationInfo vecInfo(*F, VectorWidth, LoopRegion);
+  VectorizationInfo vecInfo(F, VectorWidth, LoopRegion);
 
 // Check reduction patterns of vector loop phis
   // configure initial shape for induction variable
@@ -307,8 +324,9 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
   //DT.verify();
   //LI.verify(DT);
 
+  verifyFunction(F, &errs());
   IF_DEBUG {
-    verifyFunction(*F, &errs());
+    verifyFunction(F, &errs());
     DT->verify();
     PDT->print(errs());
     LI->print(errs());
@@ -317,8 +335,8 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
 
 // early math func lowering
   vectorizer->lowerRuntimeCalls(vecInfo, FAM);
-  DT->recalculate(*F);
-  PDT->recalculate(*F);
+  DT->recalculate(F);
+  PDT->recalculate(F);
 
 // Vectorize
   // vectorizationAnalysis
@@ -330,7 +348,7 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
     errs() << "-- EOF --\n";
   }
 
-  IF_DEBUG Dump(*F);
+  IF_DEBUG Dump(F);
   assert(L.getLoopPreheader());
 
   // control conversion
@@ -340,7 +358,7 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
   ValueToValueMapTy vecMap;
 
   ScalarEvolutionAnalysis adhocAnalysis;
-  adhocAnalysis.run(*F, FAM);
+  adhocAnalysis.run(F, FAM);
 
   bool vectorizeOk = vectorizer->vectorize(vecInfo, FAM, &vecMap);
   if (!vectorizeOk)
@@ -354,6 +372,12 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
     }
     errs() << "-- EOF --\n";
   }
+
+  if(CheckFlag("LV_VIEW_CFG"))
+    L.getHeader()->getParent()->viewCFG();
+  verifyFunction(F, &errs());
+
+
   return true;
 }
 
@@ -371,56 +395,65 @@ bool LoopVectorizer::vectorizeLoopOrSubLoops(Loop &L) {
   return Changed;
 }
 
-bool LoopVectorizer::runOnFunction(Function &F) {
+LoopVectorizer::LoopVectorizer(Function &F, TargetTransformInfo &PassTTI,
+                               TargetLibraryInfo &PassTLI,
+                               OptimizationRemarkEmitter &PassORE)
+    : RVConfig(Config::createForFunction(F)), F(F), PassTTI(PassTTI),
+      PassTLI(PassTLI), PassORE(PassORE) {
   // have we introduced ourself? (reporting output)
   enableDiagOutput = CheckFlag("LV_DIAG");
   introduced = false;
+}
 
-  if (getenv("RV_DISABLE")) return false;
+bool LoopVectorizer::run() {
+  if (getenv("RV_DISABLE"))
+    return false;
+
+  if (enableDiagOutput)
+    Report() << "loopVecPass: run on " << F.getName() << "\n";
 
   if (CheckFlag("RV_PRINT_FUNCTION")) {
-    errs() << "-- RV::LoopVectorizer::runOnFunction(F) --\n";
-    F.print(errs());
+    Report() << "-- RV::LoopVectorizer --\n";
+    F.print(Report());
   }
 
-  IF_DEBUG { errs() << " -- module before RV --\n"; Dump(*F.getParent()); }
+  IF_DEBUG {
+    errs() << " -- module before RV --\n";
+    Dump(*F.getParent());
+  }
 
-  if (enableDiagOutput) Report() << "loopVecPass: run on " << F.getName() << "\n";
-  bool Changed = false;
+  if(!IsHipSYCLKernel(F))
+    return false;
 
-// create private analysis infrastructure
+  // create private analysis infrastructure
   PassBuilder PB;
   PB.registerFunctionAnalyses(FAM);
 
-// stash function analyses
-  this->F = &F;
   this->DT = &FAM.getResult<DominatorTreeAnalysis>(F);
   this->PDT = &FAM.getResult<PostDominatorTreeAnalysis>(F);
   this->LI = &FAM.getResult<LoopAnalysis>(F);
-  this->SE = &FAM.getResult<ScalarEvolutionAnalysis>(F);
-  this->MDR = &FAM.getResult<MemoryDependenceAnalysis>(F);
   this->PB = &FAM.getResult<BranchProbabilityAnalysis>(F);
-  TargetTransformInfo & tti = getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F); // FIXME use FAM
-  TargetLibraryInfo & tli = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F); // FIXME use FAM
 
-  this->config = Config::createForFunction(F);
-
-// setup PlatformInfo
-  PlatformInfo platInfo(*F.getParent(), &tti, &tli);
+  // setup PlatformInfo
+  PlatformInfo platInfo(*F.getParent(), &PassTTI, &PassTLI);
+  vectorizer.reset(new VectorizerInterface(platInfo, RVConfig));
 
   // TODO translate fast-math flag to ULP error bound
-  if (!CheckFlag("RV_NO_SLEEF")) { addSleefResolver(config, platInfo); }
-
-  // enable inter-procedural vectorization
-  if (config.enableGreedyIPV) {
-    Report() << "Using greedy inter-procedural vectorization.\n";
-    addRecursiveResolver(config, platInfo);
+  if (!CheckFlag("RV_NO_SLEEF")) {
+    addSleefResolver(RVConfig, platInfo);
   }
 
-  vectorizer.reset(new VectorizerInterface(platInfo, config));
+  // enable inter-procedural vectorization
+  if (RVConfig.enableGreedyIPV) {
+    Report() << "Using greedy inter-procedural vectorization.\n";
+    addRecursiveResolver(RVConfig, platInfo);
+  }
 
+  if (enableDiagOutput) {
+    platInfo.print(ReportContinue());
+  }
 
-  if (enableDiagOutput) { platInfo.print(ReportContinue()); }
+  bool Changed = false;
 
   std::vector<Loop*> loops;
   for (Loop *L : *LI) loops.push_back(L);
@@ -432,34 +465,31 @@ bool LoopVectorizer::runOnFunction(Function &F) {
   // cleanup
   reda.reset();
   vectorizer.reset();
-  this->F = nullptr;
-  this->DT = nullptr;
-  this->PDT = nullptr;
-  this->LI = nullptr;
-  this->SE = nullptr;
-  this->MDR = nullptr;
-  this->PB = nullptr;
   return Changed;
 }
 
-void LoopVectorizer::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<DominatorTreeWrapperPass>();
-  AU.addRequired<LoopInfoWrapperPass>();
-  AU.addRequired<MemoryDependenceWrapperPass>();
-  AU.addRequired<PostDominatorTreeWrapperPass>();
-  AU.addRequired<ScalarEvolutionWrapperPass>();
-  AU.addRequired<BranchProbabilityInfoWrapperPass>();
+///// OldPM Wrapper Pass /////
 
-  // PlatformInfo
+void LoopVectorizerLegacyPass::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetTransformInfoWrapperPass>();
   AU.addRequired<TargetLibraryInfoWrapperPass>();
+  AU.addRequired<OptimizationRemarkEmitterWrapperPass>();
 }
 
-char LoopVectorizer::ID = 0;
+bool LoopVectorizerLegacyPass::runOnFunction(Function &F) {
+  auto &TTI = getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
+  auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F);
+  auto &ORE = getAnalysis<OptimizationRemarkEmitterWrapperPass>().getORE();
 
-FunctionPass *rv::createLoopVectorizerPass() { return new LoopVectorizer(); }
+  LoopVectorizer LoopVec(F, TTI, TLI, ORE);
+  return LoopVec.run();
+}
 
-INITIALIZE_PASS_BEGIN(LoopVectorizer, "rv-loop-vectorize",
+char LoopVectorizerLegacyPass::ID = 0;
+
+FunctionPass *rv::createLoopVectorizerLegacyPass() { return new LoopVectorizerLegacyPass(); }
+
+INITIALIZE_PASS_BEGIN(LoopVectorizerLegacyPass, "rv-loop-vectorize",
                       "RV - Vectorize loops", false, false)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
@@ -470,5 +500,22 @@ INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
 // PlatformInfo
 INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
-INITIALIZE_PASS_END(LoopVectorizer, "rv-loop-vectorize", "RV - Vectorize loops",
+INITIALIZE_PASS_END(LoopVectorizerLegacyPass, "rv-loop-vectorize", "RV - Vectorize loops",
                     false, false)
+
+
+///// NewPM Wrapper Pass /////
+
+llvm::PreservedAnalyses
+LoopVectorizerWrapperPass::run(llvm::Function &F,
+                               llvm::FunctionAnalysisManager &FAM) {
+  auto &TTI = FAM.getResult<TargetIRAnalysis>(F);
+  auto &TLI = FAM.getResult<TargetLibraryAnalysis>(F);
+  auto &ORE = FAM.getResult<OptimizationRemarkEmitterAnalysis>(F);
+
+  LoopVectorizer LoopVec(F, TTI, TLI, ORE);
+  if (LoopVec.run())
+    return llvm::PreservedAnalyses::none();
+  else
+    return llvm::PreservedAnalyses::all();
+}

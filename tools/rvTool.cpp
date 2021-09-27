@@ -54,7 +54,7 @@
 
 #include "rv/analysis/reductionAnalysis.h"
 #include "rv/analysis/loopAnnotations.h"
-#include "rv/transform/loopExitCanonicalizer.h"
+#include "rv/passes/loopExitCanonicalizer.h"
 #include "rv/transform/remTransform.h"
 #include "rv/transform/singleReturnTrans.h"
 

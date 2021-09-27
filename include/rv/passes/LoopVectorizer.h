@@ -1,4 +1,4 @@
-//===- rv/transform/loopVectorizer.h - loop vectorizer pass  --*- C++ -*-===//
+//===- rv/passes/loopVectorizer.h - loop vectorizer pass  --*- C++ -*-===//
 //
 // Part of the RV Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -33,42 +33,30 @@ namespace llvm {
 
 namespace rv {
 
-class LoopVectorizer : public llvm::FunctionPass {
+class LoopVectorizer {
 public:
-  static char ID;
-  LoopVectorizer()
-  : llvm::FunctionPass(ID)
-  , config()
-  , enableDiagOutput(false)
-  , introduced(false)
-  , DT(nullptr)
-  , PDT(nullptr)
-  , LI(nullptr)
-  , SE(nullptr)
-  , MDR(nullptr)
-  , PB(nullptr)
-  , reda()
-  , vectorizer()
-  {}
+  LoopVectorizer(llvm::Function &F, llvm::TargetTransformInfo &TTI,
+                 llvm::TargetLibraryInfo &TLI,
+                 llvm::OptimizationRemarkEmitter &ORE);
 
-  bool runOnFunction(llvm::Function &F) override;
-
-  /// Register all analyses and transformation required.
-  void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
+  bool run();
 
 private:
-  Config config;
+  Config RVConfig;
+  llvm::Function &F;
+
+  // Pass objects from PM this pass is inserted in.
+  llvm::TargetTransformInfo &PassTTI;
+  llvm::TargetLibraryInfo &PassTLI;
+  llvm::OptimizationRemarkEmitter &PassORE;
 
   bool enableDiagOutput;
   bool introduced;
 
-  llvm::Function * F;
   llvm::FunctionAnalysisManager FAM; // private pass infrastructure
   llvm::DominatorTree * DT;
   llvm::PostDominatorTree * PDT;
   llvm::LoopInfo * LI;
-  llvm::ScalarEvolution * SE;
-  llvm::MemoryDependenceResults * MDR;
   llvm::BranchProbabilityInfo * PB;
   std::unique_ptr<ReductionAnalysis> reda;
   std::unique_ptr<VectorizerInterface> vectorizer;
@@ -92,18 +80,25 @@ private:
   bool vectorizeLoopOrSubLoops(llvm::Loop &L);
 };
 
-struct LoopVectorizerWrapperPass : llvm::PassInfoMixin<LoopVectorizerWrapperPass> {
-  private:
-    std::shared_ptr<llvm::FunctionPass> loopvec;
-  public:
-    LoopVectorizerWrapperPass() : loopvec(rv::createLoopVectorizerPass()) {};
+class LoopVectorizerLegacyPass : public llvm::FunctionPass {
+public:
+  static char ID;
+  LoopVectorizerLegacyPass() : llvm::FunctionPass(ID) {}
 
-    llvm::PreservedAnalyses run (llvm::Function &F, llvm::FunctionAnalysisManager &FAM) {
-      if (loopvec->runOnFunction(F))
-        return llvm::PreservedAnalyses::none();
-      else
-        return llvm::PreservedAnalyses::all();
-    }
+  bool runOnFunction(llvm::Function &F) override;
+
+  /// Register all analyses and transformation required.
+  void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
+};
+
+struct LoopVectorizerWrapperPass
+    : public llvm::PassInfoMixin<LoopVectorizerWrapperPass> {
+public:
+  LoopVectorizerWrapperPass(){};
+
+  static llvm::StringRef name() { return "rv::LoopVectorizer"; }
+  llvm::PreservedAnalyses run(llvm::Function &F,
+                              llvm::FunctionAnalysisManager &FAM);
 };
 
 } // namespace rv
