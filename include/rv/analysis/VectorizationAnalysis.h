@@ -62,6 +62,7 @@ class VectorizationAnalysis {
   const llvm::DataLayout &layout;
   const llvm::LoopInfo &LI; // Preserves LoopInfo
   const llvm::DominatorTree &DT;
+  const llvm::LoopInfo analyzedLI; // up-to-date LI
 
   // Divergence computation:
   llvm::SyncDependenceAnalysis SDA;

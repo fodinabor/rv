@@ -46,14 +46,16 @@ VectorizationAnalysis::VectorizationAnalysis(Config _config,
       layout(platInfo.getDataLayout()),
       LI(*FAM.getCachedResult<LoopAnalysis>(vecInfo.getScalarFunction())),
       DT(FAM.getResult<DominatorTreeAnalysis>(vecInfo.getScalarFunction())),
+      analyzedLI(DT),
       SDA(DT,
           FAM.getResult<PostDominatorTreeAnalysis>(vecInfo.getScalarFunction()),
-          LI),
+          analyzedLI),
       PredA(vecInfo, FAM.getResult<PostDominatorTreeAnalysis>(
                          vecInfo.getScalarFunction())),
       funcRegion(vecInfo.getScalarFunction()),
       funcRegionWrapper(funcRegion), // FIXME
       allocaSSA(funcRegionWrapper) {
+
   // compute pointer provenance
   allocaSSA.compute();
   IF_DEBUG_VA allocaSSA.print(errs());
@@ -77,6 +79,8 @@ const Instruction *VectorizationAnalysis::takeFromWorklist() {
 }
 
 bool VectorizationAnalysis::updateTerminator(const Instruction &Term) const {
+  if(!vecInfo.inRegion(Term))
+    return false;
   if (Term.getNumSuccessors() <= 1)
     return false;
   if (vecInfo.getVectorShape(Term).isVarying()) 
@@ -467,7 +471,10 @@ void VectorizationAnalysis::init(const Function &F) {
     vecInfo.setVectorShape(BB, VectorShape::uni());
 
     for (const Instruction &I : BB) {
-      if (isa<AllocaInst>(&I)) {
+      if(!vecInfo.inRegion(BB)) {
+        updateShape(I, VectorShape::uni(vecInfo.getMapping().vectorWidth));
+      }
+      else if (isa<AllocaInst>(&I)) {
         updateShape(I, VectorShape::uni(vecInfo.getMapping().vectorWidth));
       } else if (const CallInst *call = dyn_cast<CallInst>(&I)) {
         if (call->getNumArgOperands() != 0)
