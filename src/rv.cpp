@@ -345,8 +345,8 @@ lowerIntrinsicCall(CallInst* call) {
 
     case RVIntrinsic::Mask: {
       lowerIntrinsicCall(call, [] (CallInst* call) {
-        return ConstantInt::getTrue(call->getContext()); }
-      );
+        return ConstantInt::get(call->getType(), 1, false);
+      });
     } break;
 
     case RVIntrinsic::Ballot:
