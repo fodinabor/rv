@@ -153,6 +153,19 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
     return false;
   }
 
+  this->DT = &FAM.getResult<DominatorTreeAnalysis>(*F);
+  this->PDT = &FAM.getResult<PostDominatorTreeAnalysis>(*F);
+  this->SE = &FAM.getResult<ScalarEvolutionAnalysis>(*F);
+  this->MDR = &FAM.getResult<MemoryDependenceAnalysis>(*F);
+  this->PB = &FAM.getResult<BranchProbabilityAnalysis>(*F);
+
+  auto invalidator = [this](int*) {
+    PreservedAnalyses PA;
+    PA.preserve<LoopAnalysis>();
+    FAM.invalidate(*F, PA);
+  };
+  std::unique_ptr<int, decltype(invalidator)> invalidateGuard{new int(0), std::move(invalidator)};
+
   int tripAlign = getTripAlignment(L);
 
   // use the explicitVectorWidth (if specified). Otherwise
@@ -326,10 +339,6 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
   bool vectorizeOk = vectorizer->vectorize(vecInfo, FAM, &vecMap);
   if (!vectorizeOk)
     llvm_unreachable("vector code generation failed");
-
-// restore analysis structures
-  DT->recalculate(*F);
-  PDT->recalculate(*F);
 
   if (enableDiagOutput) {
     errs() << "-- Vectorized --\n";
