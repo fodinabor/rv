@@ -334,8 +334,26 @@ void NatBuilder::vectorize(bool embedRegion, ValueToValueMapTy * vecInstMap) {
     new UnreachableInst(oldBB->getContext(), oldBB);
     while (oldBB->size() > 1) {
       auto I = oldBB->begin();
-      if (!I->getType()->isVoidTy())
+      if (!I->getType()->isVoidTy()){
+        for(auto U : I->users()) {
+          if(!vecInfo.inRegion(*cast<Instruction>(U)->getParent())) {
+            repairOutsideUses(*I,
+                        [&](Value & usedVal, BasicBlock &) -> Value& {
+                          IF_DEBUG_NAT { errs() << "\t repair outside use for " << usedVal << " formerly scalar " << *I;}
+                          if(usedVal.getType()->isVectorTy() && !I->getType()->isVectorTy()) {
+                            IF_DEBUG_NAT { errs() << " by extracting last element\n";}
+                            builder.SetInsertPoint(cast<Instruction>(usedVal).getParent()->getTerminator());
+                            return *builder.CreateExtractElement(&usedVal, vectorWidth() - 1);
+                          }
+                          IF_DEBUG_NAT { errs() << " by reusing scalar value\n";}
+
+                          return usedVal;
+                        });
+            break;
+          }
+        }
         I->replaceAllUsesWith(UndefValue::get(I->getType()));
+      }
       I->eraseFromParent();
     }
     // TODO: LoopInfo (probably) keeps an asserting handle on the old loop
@@ -458,7 +476,11 @@ void NatBuilder::vectorize(BasicBlock *const bb, BasicBlock *vecBlock) {
         case RVIntrinsic::LaneID: vectorizeLaneIDCall(call); break;
         case RVIntrinsic::NumLanes: vectorizeNumLanesCall(call); break;
         default: {
-          if (config.enableInterleaved) addLazyInstruction(inst);
+          auto* callee = call->getCalledFunction();
+          // always "vectorize" memcpy as GEP is likely uniform by now, if it was strided. todo: fix for realsies
+          if(callee && callee->getIntrinsicID() == Intrinsic::memcpy) {
+            vectorizeCallInstruction(call);
+          } else if (config.enableInterleaved) addLazyInstruction(inst);
           else {
             if (shouldVectorize(call)) vectorizeCallInstruction(call);
             else copyCallInstruction(call);
