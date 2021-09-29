@@ -24,6 +24,7 @@ LoopMD::print(raw_ostream & out) const {
   if (vectorizeEnable.isSet()) out << "vectorizeEnable = " << vectorizeEnable.get() << ", ";
   if (minDepDist.isSet()) out << "minDepDist = " << DepDistToString(minDepDist.get()) << ", ";
   if (explicitVectorWidth.isSet()) out << "explicitVectorWidth = " << explicitVectorWidth.get() << ", ";
+  out << "hipsyclWiLoop = " << hipsyclWiLoop << " ";
   out << "}";
   return out;
 }
@@ -66,6 +67,8 @@ OptimisticJoin(LoopMD && A, LoopMD && B) {
   if (A.explicitVectorWidth.isSet() || B.explicitVectorWidth.isSet()) {
     md.explicitVectorWidth = std::min<iter_t>(A.explicitVectorWidth.safeGet(ParallelDistance), B.explicitVectorWidth.safeGet(ParallelDistance));
   }
+
+  md.hipsyclWiLoop = A.hipsyclWiLoop || B.hipsyclWiLoop;
 
   return md;
 }
@@ -129,6 +132,9 @@ GetLoopAnnotation(llvm::Loop & L) {
 
     } else if (text.equals("rv.loop.mindepdist")) {
       rvAnnot.minDepDist = cast<ConstantInt>(Cst->getValue())->getSExtValue();
+    } else if (text.equals("hipSYCL.loop.workitem")) {
+      rvAnnot.hipsyclWiLoop = true;
+      llvmAnnot.hipsyclWiLoop = true;
     }
   }
 

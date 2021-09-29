@@ -58,6 +58,9 @@ namespace rv {
     // minimum dependence distance between two loop iterations
     Optional<iter_t> minDepDist;
 
+    // marked as hipSYCL work item loop
+    bool hipsyclWiLoop;
+
     llvm::raw_ostream& print(llvm::raw_ostream & out) const;
     void dump() const;
   };

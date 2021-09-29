@@ -65,6 +65,25 @@ bool LoopExitCanonicalizerWrapper::doFinalization(Module &M) {
 }
 
 bool LoopExitCanonicalizerWrapper::runOnFunction(Function &F) {
+  bool foundKernelAnnot = false;
+  for (auto &I : F.getParent()->globals()) {
+    if (I.getName() == "llvm.global.annotations") {
+      auto *CA = llvm::dyn_cast<llvm::ConstantArray>(I.getOperand(0));
+      for (auto *OI = CA->op_begin(); OI != CA->op_end(); ++OI) {
+        auto *CS = llvm::dyn_cast<llvm::ConstantStruct>(OI->get());
+        auto *AnnotFunc = llvm::dyn_cast<llvm::Function>(CS->getOperand(0)->getOperand(0));
+        auto *AnnotationGL = llvm::dyn_cast<llvm::GlobalVariable>(CS->getOperand(1)->getOperand(0));
+        llvm::StringRef Annotation =
+            llvm::dyn_cast<llvm::ConstantDataArray>(AnnotationGL->getInitializer())->getAsCString();
+        if (Annotation.compare("hipsycl_nd_kernel") == 0 && AnnotFunc == &F) {
+          foundKernelAnnot = true;
+        }
+      }
+    }
+  }
+  if(!foundKernelAnnot)
+    return false;
+  
   LoopInfo &loopInfo = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
 
   LoopExitCanonicalizer canonicalizer(loopInfo);

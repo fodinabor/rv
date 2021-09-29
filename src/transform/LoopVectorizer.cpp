@@ -132,6 +132,12 @@ LoopVectorizer::vectorizeLoop(Loop &L) {
 
   if (enableDiagOutput) { Report() << "loopVecPass: "; mdAnnot.print(ReportContinue()) << "\n"; }
 
+  // only trigger on hipSYCL WI loops
+  if(!mdAnnot.hipsyclWiLoop) {
+    if (enableDiagOutput) Report() << "loopVecPass skip " << L.getName() << " . no hipSYCL WI loop.\n";
+    return false;
+  }
+
   // only trigger on annotated loops
   if (!mdAnnot.vectorizeEnable.safeGet(false)) {
     if (enableDiagOutput) Report() << "loopVecPass skip " << L.getName() << " . not explicitly triggered.\n";
