@@ -42,6 +42,40 @@ using namespace llvm;
 
 namespace rv {
 
+// TODO: Move to CFGTools module.
+static BasicBlock *splitPreheaderEdge(BasicBlock &From, int BranchIdx, DominatorTree &DT,
+                             PostDominatorTree &PDT, LoopInfo &LI) {
+  auto *F = From.getParent();
+  auto &FromTerm = *From.getTerminator();
+  BasicBlock *To = FromTerm.getSuccessor(BranchIdx);
+  auto *SplitBlock =
+      BasicBlock::Create(From.getContext(), From.getName() + ".split", F, To);
+  BranchInst::Create(To, SplitBlock);
+  FromTerm.setSuccessor(BranchIdx, SplitBlock);
+  for (auto &Phi : To->phis())
+    Phi.replaceIncomingBlockWith(&From, SplitBlock);
+
+  // Fix LI.
+  auto *FromLoop = LI.getLoopFor(&From);
+  auto *ToLoop = LI.getLoopFor(To);
+
+  // Preheader edge (from parent loop).
+  if (FromLoop && ToLoop && (FromLoop->getLoopDepth() < ToLoop->getLoopDepth()))
+    FromLoop->addBasicBlockToLoop(SplitBlock, LI);
+  // Same loop level or exiting edge.
+  if (FromLoop && ToLoop &&
+      (FromLoop->getLoopDepth() >= ToLoop->getLoopDepth()))
+    ToLoop->addBasicBlockToLoop(SplitBlock, LI);
+
+  // Fix DT (FIXME: branch to loop header only atm).
+  auto *SplitDT = DT.addNewBlock(SplitBlock, &From);
+  DT.changeImmediateDominator(DT.getNode(To), SplitDT);
+
+  // Fix PDT.
+  auto *SplitPDT = PDT.addNewBlock(SplitBlock, To);
+  PDT.changeImmediateDominator(SplitPDT, PDT.getNode(To));
+  return SplitBlock;
+}
 
 struct IterValue {
   Value & val;
@@ -373,6 +407,7 @@ struct LoopTransformer {
   , scalarGuardBlock(nullptr)
   , vecToScalarExit(nullptr)
   {
+
     assert(loopExit && "multi exit loops unsupported (yet)");
     assert(ScalarL.getExitingBlock() && "Scalar loop does not have a unique exiting block (unsupported)");
 
@@ -873,8 +908,8 @@ RemainderTransform::canTransformLoop(llvm::Loop & L) {
     return false;
   }
 
-  if (!L.getLoopPreheader()) {
-    Report() << "remTrans: require a unique pre-header\n";
+  if (!L.getLoopPredecessor()) {
+    Report() << "remTrans: require a unique loop predecessor\n";
     return false;
   }
 
@@ -912,6 +947,27 @@ RemainderTransform::createVectorizableLoop(Loop & L, ValueSet & uniOverrides, in
     }
 
     return nullptr;
+  }
+
+  // Split the preheader edge if necessary.
+  if (!L.getLoopPreheader()) {
+    auto *ScaHead = L.getHeader();
+    auto *LoopPred = L.getLoopPredecessor();
+    auto *PredTerm = LoopPred->getTerminator();
+    int LoopBranchIdx = -1;
+    for (int i = 0; i < (int)PredTerm->getNumSuccessors(); ++i) {
+      if (ScaHead == PredTerm->getSuccessor(i)) {
+        LoopBranchIdx = i;
+        break;
+      }
+    }
+    assert((LoopBranchIdx >= 0) &&
+           "Loop predecessor does not branch to loop?");
+
+    splitPreheaderEdge(*LoopPred, LoopBranchIdx, DT, PDT, LI);
+
+    assert(L.getLoopPreheader() &&
+           "Could not establish preheader-ness");
   }
 
 // otw, clone the scalar loop
