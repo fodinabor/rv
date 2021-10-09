@@ -364,6 +364,10 @@ lowerIntrinsicCall(CallInst* call) {
       lowerIntrinsicCall(call, [] (CallInst* call) {
       return ConstantInt::get(call->getType(), 0, false);
     });break;
+    case RVIntrinsic::Index:
+      lowerIntrinsicCall(call, [] (CallInst* call) {
+        return ConstantInt::get(call->getType(), 0, false);
+      });break;
   }
 
   return true;
