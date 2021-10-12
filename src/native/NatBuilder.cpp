@@ -465,7 +465,7 @@ void NatBuilder::vectorize(BasicBlock *const bb, BasicBlock *vecBlock) {
         case RVIntrinsic::Extract: vectorizeExtractCall(call); break;
         case RVIntrinsic::Insert: vectorizeInsertCall(call); break;
         case RVIntrinsic::Compact: vectorizeCompactCall(call); break;
-        case RVIntrinsic::Mask: mapVectorValue(call, requestVectorPredicate(*call->getParent())); break;
+        case RVIntrinsic::Mask: vectorizeMaskCall(call); break;
         case RVIntrinsic::VecLoad: vectorizeLoadCall(call); break;
         case RVIntrinsic::VecStore: vectorizeStoreCall(call); break;
         case RVIntrinsic::Shuffle: vectorizeShuffleCall(call); break;
@@ -1094,6 +1094,19 @@ NatBuilder::vectorizeInsertCall(CallInst *rvCall) {
   auto * insertVal = builder.CreateInsertElement(vecVal, elemVal, laneId, "rv_ins");
   mapVectorValue(rvCall, insertVal);
 }
+
+
+void
+NatBuilder::vectorizeMaskCall(CallInst *rvCall) {
+  ++numRVIntrinsics;
+
+  assert(rvCall->getNumArgOperands() == 0 && "expected 0 arguments for rv_mask()");
+
+  Value *predicate = requestVectorPredicate(*rvCall->getParent());
+  auto * maskVal = builder.CreateZExtOrTrunc(predicate, getVectorType(rvCall->getType(), vectorWidth()));
+  mapVectorValue(rvCall, maskVal);
+}
+
 
 void
 NatBuilder::vectorizeLoadCall(CallInst *rvCall) {

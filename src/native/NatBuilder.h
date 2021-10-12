@@ -135,6 +135,7 @@ namespace rv {
     void vectorizeReductionCall(llvm::CallInst *rvCall, bool isRv_all);
     void vectorizeExtractCall(llvm::CallInst *rvCall);
     void vectorizeInsertCall(llvm::CallInst *rvCall);
+    void vectorizeMaskCall(llvm::CallInst *rvCall);
     void vectorizeLoadCall(llvm::CallInst *rvCall);
     void vectorizeStoreCall(llvm::CallInst *rvCall);
     void vectorizeShuffleCall(llvm::CallInst *rvCall);
