@@ -98,13 +98,6 @@ static llvm::RegisterStandardPasses
 ///// New PM setup /////
 
 void rv::addConfiguredRVPasses(PassBuilder &PB) {
-  PB.registerPipelineStartEPCallback(
-      [&](llvm::ModulePassManager &MPM,
-          llvm::PassBuilder::OptimizationLevel Level) {
-        if (mayVectorize())
-          rv::addPreparatoryPasses(MPM);
-      });
-
   PB.registerVectorizerStartEPCallback(
       [&](llvm::FunctionPassManager &FPM,
           llvm::PassBuilder::OptimizationLevel Level) {
@@ -112,6 +105,9 @@ void rv::addConfiguredRVPasses(PassBuilder &PB) {
           FPM.addPass(rv::IRPolisherWrapperPass());
           return;
         }
+        
+        if (mayVectorize())
+          rv::addPreparatoryPasses(FPM);
 
         if (shouldRunLoopVecPass()) {
           FPM.addPass(rv::LoopVectorizerWrapperPass());

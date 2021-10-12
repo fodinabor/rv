@@ -39,13 +39,6 @@ addPreparatoryPasses(FunctionPassManager & FPM) {
 }
 
 void
-addPreparatoryPasses(ModulePassManager & MPM) {
-  llvm::FunctionPassManager FPM;
-  addPreparatoryPasses(FPM);
-  MPM.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(FPM)));
-}
-
-void
 addCleanupPasses(ModulePassManager & MPM) {
   // post rv cleanup
   MPM.addPass(AlwaysInlinerPass());
@@ -57,13 +50,14 @@ addCleanupPasses(ModulePassManager & MPM) {
 
 void addRVPasses(ModulePassManager &MPM) {
   // normalize loops
-  addPreparatoryPasses(MPM);
+  llvm::FunctionPassManager FPM;
+  addPreparatoryPasses(FPM);
+  MPM.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(FPM)));
 
   // vectorize scalar functions that have VectorABI attributes
   MPM.addPass(WFVWrapperPass());
 
   // vectorize annotated loops
-  llvm::FunctionPassManager FPM;
   FPM.addPass(LoopVectorizerWrapperPass());
   MPM.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(FPM)));
 
