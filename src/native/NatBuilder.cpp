@@ -746,8 +746,8 @@ void NatBuilder::vectorizePHIInstruction(PHINode *const scalPhi) {
   Type *scalType = scalPhi->getType();
   Type *type = !shape.isVarying() || scalType->isVectorTy() || scalType->isStructTy() ?
                scalType : getVectorType(scalPhi->getType(), vectorWidth());
-  auto name = !shape.isVarying() || scalType->isVectorTy() || scalType->isStructTy() ?
-              scalPhi->getName() : scalPhi->getName() + "_SIMD";
+  std::string name = (!shape.isVarying() || scalType->isVectorTy() || scalType->isStructTy() ?
+              scalPhi->getName() : scalPhi->getName() + "_SIMD").str();
 
   // replicate phi <vector_width> times if type is not vectorizable
   unsigned loopEnd = shape.isVarying() && (scalType->isVectorTy() || scalType->isStructTy()) ? vectorWidth() : 1;
