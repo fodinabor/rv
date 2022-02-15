@@ -24,7 +24,7 @@
 
 #include <numeric>
 
-#if 1
+#if 0
 #define IF_DEBUG_VA IF_DEBUG
 #else
 #define IF_DEBUG_VA if (true)

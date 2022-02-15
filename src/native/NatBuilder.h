@@ -146,6 +146,7 @@ namespace rv {
     void vectorizeCompactCall(llvm::CallInst * rvCall);
     void vectorizeLaneIDCall(llvm::CallInst *rvCall);
     void vectorizeNumLanesCall(llvm::CallInst *rvCall);
+    void vectorizeReduceAddCall(llvm::CallInst *rvCall);
 
     void vectorizeAtomicRMW(llvm::AtomicRMWInst *const atomicrmw);
 

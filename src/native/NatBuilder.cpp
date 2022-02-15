@@ -475,6 +475,7 @@ void NatBuilder::vectorize(BasicBlock *const bb, BasicBlock *vecBlock) {
         case RVIntrinsic::Align: vectorizeAlignCall(call); break;
         case RVIntrinsic::LaneID: vectorizeLaneIDCall(call); break;
         case RVIntrinsic::NumLanes: vectorizeNumLanesCall(call); break;
+        case RVIntrinsic::RedAdd: vectorizeReduceAddCall(call); break;
         default: {
           auto* callee = call->getCalledFunction();
           // always "vectorize" memcpy as GEP is likely uniform by now, if it was strided. todo: fix for realsies
@@ -1041,6 +1042,25 @@ void NatBuilder::vectorizeReductionCall(CallInst *rvCall, bool isRv_all) {
   }
 #endif
 
+  mapScalarValue(rvCall, reduction);
+
+  ++numRVIntrinsics;
+}
+
+void NatBuilder::vectorizeReduceAddCall(CallInst *rvCall) {
+  assert(rvCall->getNumArgOperands() == 1 && "expected only 1 argument for rv_reduce_add");
+
+  Value *value = rvCall->getArgOperand(0);
+  const VectorShape &shape = getVectorShape(*value);
+  // assert((shape.isVarying() || shape.isUniform()) && "value can't be contigious or strided");
+
+  auto * vector = getVectorValue(*value, false);
+  Value *reduction;
+  if(value->getType()->isFloatingPointTy())
+    reduction = builder.CreateFAddReduce(llvm::ConstantFP::getZeroValueForNegation(value->getType()), vector);
+  else
+    reduction = builder.CreateAddReduce(vector);
+  
   mapScalarValue(rvCall, reduction);
 
   ++numRVIntrinsics;

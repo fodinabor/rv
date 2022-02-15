@@ -160,6 +160,20 @@ VectorShapeTransformer::computeIdealShapeForInst(const Instruction& I, SmallValV
 
           if (stride >= 0 && alignment >= stride * vectorWidth)
             return VectorShape::uni();
+          switch(predicate) {
+            case CmpInst::Predicate::ICMP_SGT:
+            case CmpInst::Predicate::ICMP_UGT:
+            case CmpInst::Predicate::ICMP_SLT:
+            case CmpInst::Predicate::ICMP_ULT:
+              if (stride == 1 && (getObservedShape(BB, op1).getStride() == 1 || getObservedShape(BB, op2).getStride() == 1))
+                return VectorShape::uni();
+              break;
+            case CmpInst::Predicate::ICMP_SGE:
+            case CmpInst::Predicate::ICMP_UGE:
+            case CmpInst::Predicate::ICMP_SLE:
+            case CmpInst::Predicate::ICMP_ULE:
+              break;
+          }
 
         }
       break;

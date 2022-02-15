@@ -44,6 +44,7 @@ namespace rv {
     VecStore = 103, // rv_store(V)
     Shuffle = 104, // rv_shuffle(V, S) returns the varying value V shifted by constant S
     Align = 105, // rv_align(V, C) informs RV that V has the alignment constant C
+    RedAdd = 150, // rv_reduce_add(V) performs additive vector reduction
   };
 
   VectorMapping GetIntrinsicMapping(llvm::Function&, RVIntrinsic rvIntrin);

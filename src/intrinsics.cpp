@@ -268,6 +268,17 @@ GetIntrinsicMapping(Function & func, RVIntrinsic rvIntrin) {
         CallPredicateMode::SafeWithoutPredicate
         ));
     } break;
+    case RVIntrinsic::RedAdd: {
+      return (VectorMapping(
+        &func,
+        &func,
+        0, // no specific vector width
+        -1, //
+        VectorShape::uni(), // broadcasted (static) number of lanes
+        {VectorShape::varying()},
+        CallPredicateMode::SafeWithoutPredicate
+        ));
+    } break;
   }
 }
 
